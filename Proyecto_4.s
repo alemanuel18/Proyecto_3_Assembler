@@ -60,13 +60,18 @@ delay1:
     SUBS r2, r2, #1
     BNE delay1
 
-    // 2. Configurar PA0-PA7 como salidas (MODER = 01)
+    // 2. Configurar PA0-PA7 y PA8-PA9 como salidas (MODER = 01)
     LDR r0, =GPIOA_MODER
     LDR r1, [r0]
     LDR r2, =0xFFFF0000           // Máscara para limpiar bits 0-15
     AND r1, r1, r2
     LDR r2, =0x00005555           // 01 (salida) para cada pin de 0-7
     ORR r1, r1, r2
+    // Configurar también PA8 y PA9 como salidas
+    BIC r1, r1, #(0x03 << 16)     // Limpiar bits para PA8
+    BIC r1, r1, #(0x03 << 18)     // Limpiar bits para PA9
+    ORR r1, r1, #(0x01 << 16)     // PA8 como salida
+    ORR r1, r1, #(0x01 << 18)     // PA9 como salida
     STR r1, [r0]
 
     // 3. Configurar PB0-PB2 como salidas (indicadores de velocidad)
@@ -105,18 +110,19 @@ main_loop:
     STR r1, [r0]
     BL delay_current
 
-    // Secuencia: PA0 PA1 PA2
-    MOV r1, #0x0007               // PA0-PA2 = 1 (0x07)
+    // Secuencia: PA0 PA1 PA8 (en lugar de PA2)
+    MOV r1, #0x0103               // PA0, PA1, PA8 = 1 (0x0103)
     STR r1, [r0]
     BL delay_current
 
-    // Secuencia: PA2
-    MOV r1, #0x0004               // PA2 = 1 (0x04)
+    // Secuencia: PA8 (en lugar de PA2)
+    MOV r1, #0x0100               // PA8 = 1 (0x0100)
     STR r1, [r0]
     BL delay_current
 
-    // Secuencia: PA2 PA3 PA4
-    MOV r1, #0x001C               // PA2-PA4 = 1 (0x1C)
+    // Secuencia: PA8 PA9 PA4 (en lugar de PA3)
+    MOV r1, #0x0300               // PA8, PA9 = 1 (0x0300)
+    ORR r1, r1, #0x0010           // PA4 = 1 (resultado 0x0310)
     STR r1, [r0]
     BL delay_current
 
