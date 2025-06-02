@@ -29,9 +29,9 @@
 .equ RCC_GPIOCEN, 0x00000004
 .equ BUTTON_BLUE, 0x00002000     // PC13
 .equ BUTTON_BLACK,0x00000001     // PC0
-.equ DELAY_SLOW,   9000000       // 1.5s
-.equ DELAY_MEDIUM, 4500000       // 0.75s
-.equ DELAY_FAST,   1500000       // 0.25s
+.equ DELAY_SLOW,   18000000       // 3.0s
+.equ DELAY_MEDIUM, 9000000       // 1.5s
+.equ DELAY_FAST,   3000000       // 0.5s
 .equ DEBOUNCE_TIME, 20000        // Reduced debounce
 .equ BUTTON_CHECK_INTERVAL, 500  // More frequent checks
 
@@ -40,8 +40,8 @@
 .thumb
 
 .section .data
-current_delay: .word DELAY_SLOW
-delay_state:   .word 1            // 1=slow, 2=medium, 3=fast
+current_delay: .word DELAY_MEDIUM
+delay_state:   .word 2            // 1=slow, 2=medium, 3=fast
 button_debounce: .word 0
 last_button_state: .word 0        // Previous button state
 
@@ -96,9 +96,9 @@ delay1:
     ORR r1, r1, #0x04000000      // PC13 pull-up
     STR r1, [r0]
 
-    // Initialize indicator (PB0 on)
+    // Initialize indicator (PB1 on)
     LDR r0, =GPIOB_ODR
-    MOV r1, #0x01
+    MOV r1, #0x02
     STR r1, [r0]
 
     // Initialize SysTick
