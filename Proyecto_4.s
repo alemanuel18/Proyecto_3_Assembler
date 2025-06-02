@@ -42,7 +42,8 @@
 
 .section .data
 current_delay: .word DELAY_SLOW    // Variable para almacenar el delay actual
-delay_state:   .word 0x0001        // Estado actual: 1=lento, 2=medio, 4=rápido
+delay_state:   .word 0x0001        // Estado actual: 1=lento, 2=medio, 3=rápido
+button_debounce: .word 0           // Variable para debounce
 
 .section .text
 .global main
@@ -88,7 +89,7 @@ delay1:
     BIC r1, r1, #0x0C000000       // Limpiar bits para PC13 (botón azul)
     STR r1, [r0]
 
-    // Inicializar indicador de velocidad (PB0 encendido)
+    // Inicializar indicador de velocidad (PB0 encendido - lento)
     LDR r0, =GPIOB_ODR
     MOV r1, #0x0001               // Encender PB0 (velocidad lenta)
     STR r1, [r0]
@@ -150,91 +151,109 @@ main_loop:
 
 // Subrutina para verificar botones y cambiar velocidad
 check_buttons:
-    PUSH {r0-r3, lr}
+    PUSH {r0-r5, lr}
 
     // Leer estado de los botones
     LDR r0, =GPIOC_IDR
     LDR r1, [r0]
 
-    // Verificar botón azul (PC13 - disminuir velocidad)
+    // Verificar si ya estamos en debounce
+    LDR r5, =button_debounce
+    LDR r4, [r5]
+    CMP r4, #0
+    BNE debounce_active
+
+    // Verificar botón azul (PC13 - AUMENTAR velocidad)
     TST r1, #BUTTON_BLUE
     BEQ check_black_button        // Si no está presionado, verificar el otro
 
-    // Botón azul presionado - disminuir velocidad
+    // Botón azul presionado - AUMENTAR velocidad
     LDR r2, =delay_state
     LDR r3, [r2]
-    CMP r3, #0x0004              // Si ya estamos en velocidad lenta, no hacer nada
-    BEQ end_check_buttons
-    LSL r3, r3, #1               // Cambiar a velocidad más lenta (1->2->4)
+    CMP r3, #3                   // Si ya estamos en velocidad rápida, no hacer nada
+    BEQ set_debounce
+
+    ADD r3, r3, #1               // Aumentar velocidad (1->2->3)
     STR r3, [r2]
 
-    // Actualizar delay actual
+    // Actualizar delay actual según el estado
     LDR r2, =current_delay
-    CMP r3, #0x0001
+    CMP r3, #1
     ITT EQ
     LDREQ r3, =DELAY_SLOW
     STREQ r3, [r2]
-    CMP r3, #0x0002
+    CMP r3, #2
     ITT EQ
     LDREQ r3, =DELAY_MEDIUM
     STREQ r3, [r2]
-    CMP r3, #0x0004
+    CMP r3, #3
     ITT EQ
     LDREQ r3, =DELAY_FAST
     STREQ r3, [r2]
 
-    // Actualizar indicadores GPIOB
+    // Actualizar indicadores GPIOB (PB0=slow, PB1=med, PB2=fast)
     LDR r0, =GPIOB_ODR
-    STR r3, [r0]                 // r3 contiene el patrón correcto (0x01, 0x02 o 0x04)
+    MOV r1, #0                   // Apagar todos
+    STR r1, [r0]
+    MOV r1, #1                   // Máscara base
+    SUB r3, r3, #1               // Ajustar para desplazamiento (0-2)
+    LSL r1, r1, r3               // Desplazar según velocidad
+    STR r1, [r0]
 
-    // Pequeño delay para debounce
-    MOV r0, #0xFFFF
-debounce_delay1:
-    SUBS r0, r0, #1
-    BNE debounce_delay1
-
-    B end_check_buttons
+    B set_debounce
 
 check_black_button:
-    // Verificar botón negro (PC0 - aumentar velocidad)
+    // Verificar botón negro (PC0 - DISMINUIR velocidad)
     TST r1, #BUTTON_BLACK
     BEQ end_check_buttons         // Si no está presionado, salir
 
-    // Botón negro presionado - aumentar velocidad
+    // Botón negro presionado - DISMINUIR velocidad
     LDR r2, =delay_state
     LDR r3, [r2]
-    CMP r3, #0x0001              // Si ya estamos en velocidad rápida, no hacer nada
-    BEQ end_check_buttons
-    LSR r3, r3, #1               // Cambiar a velocidad más rápida (4->2->1)
+    CMP r3, #1                   // Si ya estamos en velocidad lenta, no hacer nada
+    BEQ set_debounce
+
+    SUB r3, r3, #1               // Disminuir velocidad (3->2->1)
     STR r3, [r2]
 
-    // Actualizar delay actual
+    // Actualizar delay actual según el estado
     LDR r2, =current_delay
-    CMP r3, #0x0001
+    CMP r3, #1
     ITT EQ
     LDREQ r3, =DELAY_SLOW
     STREQ r3, [r2]
-    CMP r3, #0x0002
+    CMP r3, #2
     ITT EQ
     LDREQ r3, =DELAY_MEDIUM
     STREQ r3, [r2]
-    CMP r3, #0x0004
+    CMP r3, #3
     ITT EQ
     LDREQ r3, =DELAY_FAST
     STREQ r3, [r2]
 
-    // Actualizar indicadores GPIOB
+    // Actualizar indicadores GPIOB (PB0=slow, PB1=med, PB2=fast)
     LDR r0, =GPIOB_ODR
-    STR r3, [r0]                 // r3 contiene el patrón correcto (0x01, 0x02 o 0x04)
+    MOV r1, #0                   // Apagar todos
+    STR r1, [r0]
+    MOV r1, #1                   // Máscara base
+    SUB r3, r3, #1               // Ajustar para desplazamiento (0-2)
+    LSL r1, r1, r3               // Desplazar según velocidad
+    STR r1, [r0]
 
-    // Pequeño delay para debounce
-    MOV r0, #0xFFFF
-debounce_delay2:
-    SUBS r0, r0, #1
-    BNE debounce_delay2
+set_debounce:
+    // Establecer tiempo de debounce (evitar múltiples detecciones)
+    MOV r0, #100                 // Valor de debounce (ajustar según necesidad)
+    LDR r1, =button_debounce
+    STR r0, [r1]
+    B end_check_buttons
+
+debounce_active:
+    // Decrementar contador de debounce
+    SUBS r4, r4, #1
+    STR r4, [r5]
 
 end_check_buttons:
-    POP {r0-r3, pc}
+    POP {r0-r5, pc}
 
 // Subrutina de delay con el tiempo actual
 delay_current:
