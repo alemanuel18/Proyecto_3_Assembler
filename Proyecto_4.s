@@ -108,8 +108,8 @@ delay1:
 // Configura botones (PC0 y PC13) como entradas con pull-up
     LDR r0, =GPIOC_MODER
     LDR r1, [r0] //Valor actual del moder c
-    BIC r1, r1, #0x00000003      // Limpia los bits de PC0 a (00) (como entrada)
-    BIC r1, r1, #0x0C000000      // Limpia los bits de PC13 a (00) (como entrada)
+    BIC r1, r1, #0x00000003      // Limpia los bits de PC0 a (00) (como entrada
+    BIC r1, r1, #0x0C000000      // Limpia los bits de PC13 a (00) (como entrada
     STR r1, [r0]
 
     LDR r0, =GPIOC_PUPDR //Entradas del registro c
@@ -132,7 +132,7 @@ delay1:
 
 main_loop:
     BL check_buttons                     // Verifica estado de botones
-    LDR r5, =GPIOA_ODR                   // Dirección de salida de GPIOA
+    LDR r5, =GPIOA_ODR //Carga las direcciones de salida del GPIOA
 
 // Paso 1: PA0 encendido
     MOV r0, #(1 << 0)
@@ -211,34 +211,34 @@ delay_loop:
 
 check_buttons:
     PUSH {r0-r5, lr}
-    LDR r0, =GPIOC_IDR
-    LDR r1, [r0]                 // Lee entradas actuales
-    LDR r2, =last_button_state
-    LDR r3, [r2]                 // Último estado guardado
-    STR r1, [r2]                 // Guarda nuevo estado
+    LDR r0, =GPIOC_IDR //Registro de entradas del GPIOC
+    LDR r1, [r0]                 // Lee entradas actuales (del GPIOC)
+    LDR r2, =last_button_state	////Carga a R2 la variable del ultimo estado del boton
+    LDR r3, [r2]                 // Obtiene el valor del ultimo estado del boton
+    STR r1, [r2]                 // Se actualiza el estado de last button state
 
-    LDR r5, =button_debounce
-    LDR r4, [r5]
-    CMP r4, #0
-    BEQ check_edges              // Solo si no hay rebote
-    SUBS r4, r4, #1
-    STR r4, [r5]
-    B end_check
+    LDR r5, =button_debounce //contador de rebote
+    LDR r4, [r5] //Carga el valor de la cantidad de veces que rebotó
+    CMP r4, #0 //Se compara que no hubieran habido rebotes contador de rebote == 0
+    BEQ check_edges  //En caso de que no haya rebote
+    SUBS r4, r4, #1 //Si era distinto de 0, le quita 1 para esperar a que no haya rebote
+    STR r4, [r5] //guarda el nuevo valor en el contador de rebotes
+    B end_check	//Fin de la funcion
 
 check_edges:
-    TST r3, #BUTTON_BLUE         // Estaba presionado antes
-    BEQ check_black_edge
-    TST r1, #BUTTON_BLUE         // Ahora liberado
-    BNE check_black_edge
-
-    LDR r0, =delay_state
-    LDR r1, [r0]
-    CMP r1, #3
-    BEQ set_debounce
-    ADD r1, r1, #1
-    STR r1, [r0]
-    BL update_speed
-    B set_debounce
+    TST r3, #BUTTON_BLUE         //Compara si el bit del botón azul estaba activo antes, valor de R3
+    BEQ check_black_edge		//Si no estaba activado antes, revisa otro boton
+    TST r1, #BUTTON_BLUE        // R1 tiene las entradas actuales del GPIOC, lo compara con el boton azul para ver si sigue presionado
+    BNE check_black_edge		//Si sigue presionado no pasa nada y revisa otro botón
+								//Si si está liberado (se trabaja con flanco de subida)
+    LDR r0, =delay_state		//Retardo utilizado actualmente
+    LDR r1, [r0]				//CArga el valor del retardo
+    CMP r1, #3					//Si ya es la velocidad 3, no se hace nada
+    BEQ set_debounce			//Se reinicia el tiempo de rebote para usar nuevamente el boton
+    ADD r1, r1, #1				//Si no ha llegado al mmaximo, se aumenta en 1 el delay (para de 1 lento a 2 medio por ejemplo)
+    STR r1, [r0]				//Se guarda el cambio en la variable
+    BL update_speed				//Con este cambio conlleva un aumento de velocidad
+    B set_debounce				//Se reinicia el tiempo de rebote para usar nuevamente el boton
 
 check_black_edge:
     TST r3, #BUTTON_BLACK
@@ -254,11 +254,15 @@ check_black_edge:
     STR r1, [r0]
     BL update_speed
 
+
 set_debounce:
+	//Se carga a 0 la variable tiempo de rebote
     LDR r0, =DEBOUNCE_TIME
+    //Carga el valor definidod al contador de rebote
     STR r0, [r5]
 
 end_check:
+	//Restaura el estado anterior de los registros y sale de la funcion
     POP {r0-r5, pc}
 
 update_speed:
