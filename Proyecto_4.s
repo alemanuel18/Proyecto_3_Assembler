@@ -183,32 +183,33 @@ main_loop:
     B main_loop
 
 responsive_delay:
+	//Guarda los registros para no perder sus valores
     PUSH {r0-r5, lr}
     LDR r0, =current_delay
-    LDR r0, [r0]
+    LDR r0, [r0]	//Se obtiene el valor del delay actual usado para controlar la velocidad (ciclos)
 
-    LDR r1, =STK_LOAD
-    STR r0, [r1]
-    LDR r1, =STK_VAL
-    MOV r2, #0
-    STR r2, [r1]
-    LDR r1, =STK_CTRL
-    MOV r2, #0x05
-    STR r2, [r1]
+    LDR r1, =STK_LOAD //Carga en r1 la dirección en memoria del timer a utilizar
+    STR r0, [r1]	  //carga en r0 el valor del timer utilizado (los ciclos que se deben esperar para lograr la velocidad deseadad)
+    LDR r1, =STK_VAL  //Se carga el contador actual del timer
+    MOV r2, #0		  //Se coloca en 0 para empezar el conteo
+    STR r2, [r1]	  //Se guarda la configuración del conteo
+    LDR r1, =STK_CTRL //Carga la dirección para controlar el timer
+    MOV r2, #0x05	  //Coloca el valor en 0000 0101 (usar el reloj del sistema para el temporizador)
+    STR r2, [r1]	  //Se guarda la configuración
 
 delay_loop:
-    BL check_buttons             // Permite cambiar velocidad en medio del retardo
+	//Revisa dos veces que se hayan apachado los botones para poder cambiar de velocidad en un ciclo o entre ciclos
+    BL check_buttons
     BL check_buttons
 
+	//carga la dirección para controlar el timer
     LDR r1, =STK_CTRL
-    LDR r2, [r1]
-    ANDS r2, r2, #0x10000        // Espera hasta que cuente a cero
-    BEQ delay_loop
-
+    LDR r2, [r1]	//Se obtiene el valor del timer
+    ANDS r2, r2, #0x10000        //Se espera a que el timer deje de contar (bit 16 countflag == 1)
+    BEQ delay_loop				//Sigue eseprando a que termine de contar el timer
     MOV r2, #0
-    STR r2, [r1]
-    POP {r0-r5, pc}
-
+    STR r2, [r1]		//Si ya terminó de contar se carga el 0 al controlador del timer para detenerlo
+    POP {r0-r5, pc}		//Se restauran los valores guardados
 check_buttons:
     PUSH {r0-r5, lr}
     LDR r0, =GPIOC_IDR //Registro de entradas del GPIOC
@@ -241,18 +242,18 @@ check_edges:
     B set_debounce				//Se reinicia el tiempo de rebote para usar nuevamente el boton
 
 check_black_edge:
-    TST r3, #BUTTON_BLACK
-    BEQ end_check
-    TST r1, #BUTTON_BLACK
-    BNE end_check
+    TST r3, #BUTTON_BLACK	//Compara si el bit del botón negro estaba activo antes, valor de r3
+    BEQ end_check			// Si el bit era 0, osease no estaba presionado, se deja de revisar ya que no hay cambio
+    TST r1, #BUTTON_BLACK	//Se verifica si el botón sigue presionado en caso si se haya apachado
+    BNE end_check			//Si sigue presionado se termimna,
 
-    LDR r0, =delay_state
-    LDR r1, [r0]
-    CMP r1, #1
-    BEQ set_debounce
-    SUB r1, r1, #1
-    STR r1, [r0]
-    BL update_speed
+    LDR r0, =delay_state	//Si ya no está presionado (es decir detectamos un flanco de bajada)
+    LDR r1, [r0]			//Se carga en r1 el valor del delay actual
+    CMP r1, #1				//Se compara para ver si ya está en la velocidad 1 (la más baja)
+    BEQ set_debounce		//Si ya esta en la más baja solo se aplica el tiempo de rebote
+    SUB r1, r1, #1			//Si no está en la más baja, se baja en una velocidad
+    STR r1, [r0]			//Se guarda el cambio
+    BL update_speed			//Se actualiza la velocidad
 
 
 set_debounce:
@@ -265,51 +266,68 @@ end_check:
 	//Restaura el estado anterior de los registros y sale de la funcion
     POP {r0-r5, pc}
 
+//Actualizar la velocidad del patrón
 update_speed:
+	//Se almacenan en una pila los registros para no perder sus valores actuales
     PUSH {r0-r2, lr}
+    //Se carga la dirección de memoria del delay actual (tiempo)
     LDR r0, =current_delay
+    //Se carga la direccion de memoria del delay (estado, 1 = lento, 2 = medio, 3 = rapido)
     LDR r1, =delay_state
+    //Se carga el valor del estado del delay en r1
     LDR r1, [r1]
 
+	//Se verifica si se encuentra en el estado de velocidad 1 (lento)
     CMP r1, #1
     ITT EQ
-    LDREQ r2, =DELAY_LENTO
-    STREQ r2, [r0]
+    LDREQ r2, =DELAY_LENTO //Si es igual, se carga la velocidad correspondiente a lento
+    STREQ r2, [r0]		   //Guarda la configuración
 
+	//Se verifica si se encuentra en el estado de velocidad 2 (medio)
     CMP r1, #2
     ITT EQ
-    LDREQ r2, =DELAY_MEDIO
-    STREQ r2, [r0]
+    LDREQ r2, =DELAY_MEDIO //Si es igual se carga la velocidad correspondiente a medio
+    STREQ r2, [r0] 		   //Se guarda la configuración
 
+	//Se verifica si se encuentra en la velocidad 3 (rapida)
     CMP r1, #3
     ITT EQ
-    LDREQ r2, =DELAY_RAPIDO
-    STREQ r2, [r0]
-
+    LDREQ r2, =DELAY_RAPIDO //Si es igual se carga la velocidad correspondiente a rapido
+    STREQ r2, [r0]			//Se guarda la configuración
+	//Se actualizan las leds encendidas dependiendo de la velocidad
     BL update_leds
+    //Restaura los valores de los registros originales
     POP {r0-r2, pc}
 
+//Define que led se encenderá dependiendo del estado de velocidad en el que se encuentre
 update_leds:
+	//Se guardan los valores de los registros para no perderlos durante la funcion
     PUSH {r0-r2, lr}
-    LDR r0, =GPIOB_ODR
+    LDR r0, =GPIOB_ODR	//Se carga en R0 las salidas del GPIOO
+    //Se asigna 0 a R2 para apagar todos los leds
     MOV r2, #0
-    STR r2, [r0]               // Apaga todos
+    STR r2, [r0]              //Se guarda la configuración con todos apagados
+    //Se obtiene el valor del estado de velocidad actual (1 =lento, 2 =  medio, 3 = rapido)
     LDR r1, =delay_state
     LDR r1, [r1]
 
+	//Si nos encontramos en el estado de velocidad lento "1"
     CMP r1, #1
     ITT EQ
-    MOVEQ r2, #0x01            // PB0 encendido = lento
-    STREQ r2, [r0]
+    MOVEQ r2, #0x01            //Encendemos PB0
+    STREQ r2, [r0]				//Se guarda la configuración
 
+	//Si nos encontramos en el estado de velocidad media "2"
     CMP r1, #2
     ITT EQ
-    MOVEQ r2, #0x02            // PB1 encendido = medio
-    STREQ r2, [r0]
+    MOVEQ r2, #0x02            //Encendemos PB1
+    STREQ r2, [r0]			   //Se guarda la configuración
 
+	//Si nos encontramos en el estado de veloicdad rapido "3"
     CMP r1, #3
     ITT EQ
-    MOVEQ r2, #0x04            // PB2 encendido = rápido
+    MOVEQ r2, #0x04            //Se enciende PB2
     STREQ r2, [r0]
 
+	//Se recuperan los valores anteriores de los registros para que siga funcionando correctamente el programa
     POP {r0-r2, pc}
