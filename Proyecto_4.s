@@ -106,39 +106,52 @@ delay1:
 
 main_loop:
     BL check_buttons
+    LDR r5, =GPIOA_ODR  // R5 = dirección GPIOA_ODR (constante)
 
-    // LED sequence
-    LDR r0, =GPIOA_ODR
-    MOV r1, #0x0001       // PA0
-    STR r1, [r0]
+    // 1. PA0 (R0)
+    MOV r0, #(1 << 0)
+    STR r0, [r5]
     BL responsive_delay
 
-    MOV r1, #0x0103       // PA0, PA1, PA8
-    STR r1, [r0]
+    // 2. PA0 (R0) + PA1 (R1) + PA8 (R2)
+    MOV r0, #(1 << 0)
+    MOV r1, #(1 << 1)
+    MOV r2, #(1 << 8)
+    ORR r6, r0, r1
+    ORR r6, r6, r2
+    STR r6, [r5]
     BL responsive_delay
 
-    MOV r1, #0x0100       // PA8
-    STR r1, [r0]
+    // 3. PA8 (R2)
+    STR r2, [r5]
     BL responsive_delay
 
-    MOV r1, #0x0310       // PA8, PA9, PA4
-    STR r1, [r0]
+    // 4. PA8 (R2) + PA9 (R3) + PA4 (R4)
+    MOV r3, #(1 << 9)
+    MOV r4, #(1 << 4)
+    ORR r6, r2, r3
+    ORR r6, r6, r4
+    STR r6, [r5]
     BL responsive_delay
 
-    MOV r1, #0x0010       // PA4
-    STR r1, [r0]
+    // 5. PA4 (R4)
+    STR r4, [r5]
     BL responsive_delay
 
-    MOV r1, #0x0070       // PA4-PA6
-    STR r1, [r0]
+    // 6. PA4 (R4) + PA5 (R7) + PA6 (R7)
+    MOV r7, #(1 << 5 | 1 << 6)
+    ORR r6, r4, r7
+    STR r6, [r5]
     BL responsive_delay
 
-    MOV r1, #0x0040       // PA6
-    STR r1, [r0]
+    // 7. PA6 (parte de R7)
+    MOV r6, #(1 << 6)
+    STR r6, [r5]
     BL responsive_delay
 
-    MOV r1, #0x0080       // PA7
-    STR r1, [r0]
+    // 8. PA7 (R7)
+    MOV r7, #(1 << 7)
+    STR r7, [r5]
     BL responsive_delay
 
     B main_loop
